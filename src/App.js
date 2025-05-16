@@ -2,11 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { ThemeProvider } from 'styled-components';
 import { GlobalStyles, lightTheme, darkTheme } from './styles/GlobalStyles';
 import { AppProvider, useAppContext } from './context/AppContext';
+import { MonacoProvider } from './context/MonacoContext';
 import Navbar from './components/Navbar';
 import FRQDisplay from './components/FRQDisplay';
 import JavaEditor from './components/JavaEditor';
+import SimpleJavaEditor from './components/SimpleJavaEditor';
+import EditorSwitcher from './components/EditorSwitcher';
 import Controls from './components/Controls';
 import WelcomeExperience from './components/WelcomeExperience';
+import EditorHealthMonitor from './components/EditorHealthMonitor';
 import { AnimatePresence, motion } from 'framer-motion';
 import styled from 'styled-components';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -53,6 +57,7 @@ const EditorSection = styled(motion.section)`
   border-radius: 12px;
   overflow: hidden;
   min-height: 400px;
+  display: flex;
   
   @media (min-width: 992px) {
     height: 100%;
@@ -72,6 +77,7 @@ function AppWithTheme() {
   const { darkMode } = useAppContext();
   const theme = darkMode ? darkTheme : lightTheme;
   const [showWelcome, setShowWelcome] = useState(false);
+  const [useSimpleEditor, setUseSimpleEditor] = useState(false);
 
   // Check if we should show welcome experience
   useEffect(() => {
@@ -84,7 +90,22 @@ function AppWithTheme() {
       }, 1000);
       return () => clearTimeout(timer);
     }
+    
+    // Check if user prefers simple editor
+    const preferSimple = localStorage.getItem('useSimpleEditor');
+    if (preferSimple === 'true') {
+      setUseSimpleEditor(true);
+    }
   }, []);
+  
+  // Toggle between editors
+  const toggleEditor = () => {
+    setUseSimpleEditor(prev => {
+      const newValue = !prev;
+      localStorage.setItem('useSimpleEditor', newValue.toString());
+      return newValue;
+    });
+  };
 
   // Animation variants
   const containerVariants = {
@@ -123,7 +144,11 @@ function AppWithTheme() {
           </FRQSection>
           
           <EditorSection variants={itemVariants}>
-            <JavaEditor />
+            <EditorSwitcher 
+              isSimpleEditor={useSimpleEditor} 
+              onToggle={toggleEditor} 
+            />
+            {useSimpleEditor ? <SimpleJavaEditor /> : <JavaEditor />}
           </EditorSection>
           
           <ControlsSection variants={itemVariants}>
@@ -136,6 +161,9 @@ function AppWithTheme() {
             <WelcomeExperience onClose={() => setShowWelcome(false)} />
           )}
         </AnimatePresence>
+        
+        {/* Monitor for Monaco editor health */}
+        <EditorHealthMonitor />
       </AppContainer>
     </ThemeProvider>
   );
@@ -145,7 +173,9 @@ function AppWithTheme() {
 function App() {
   return (
     <AppProvider>
-      <AppWithTheme />
+      <MonacoProvider>
+        <AppWithTheme />
+      </MonacoProvider>
     </AppProvider>
   );
 }

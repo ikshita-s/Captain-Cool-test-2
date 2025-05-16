@@ -251,5 +251,66 @@ export const GlobalStyles = createGlobalStyle`
     html {
       font-size: 14px;
     }
+  }  /* Monaco Editor Specific Styles */
+  .monaco-editor, .monaco-editor .overflow-guard {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  .monaco-editor-container {
+    height: 100% !important;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Fix for editor input handling */
+  .monaco-editor .inputarea {
+    z-index: 10 !important;
+    opacity: 1 !important;
+    background: transparent !important;
+    pointer-events: auto !important;
+    position: absolute !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+  
+  /* Ensure content widgets are properly positioned */
+  .monaco-editor .contentWidgets {
+    z-index: 5 !important;
+  }
+  
+  /* Fix for editor cursor */
+  .monaco-editor .cursor {
+    z-index: 4 !important;
+    visibility: visible !important;
+  }
+  
+  /* Fix issues with overlay widgets */
+  .monaco-editor .overlayWidgets {
+    z-index: 6 !important;
+  }
+  
+  /* Fix editor viewport */
+  .monaco-editor .editor-scrollable {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  /* Make sure editor has proper dimensions */
+  .monaco-editor {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 300px !important;
+  }
+  
+  /* Fix tooltip interaction */
+  .monaco-hover {
+    z-index: 100 !important;
+  }
+  
+  /* Fix suggestions widget */
+  .monaco-editor .suggest-widget {
+    z-index: 50 !important;
   }
 `;

@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import './utils/editorFix'; // Import the editor fix utility
 
 // Add a welcome message about the cookie usage
 if (!localStorage.getItem('cookie_notice_seen')) {

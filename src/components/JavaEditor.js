@@ -4,6 +4,8 @@ import { useAppContext } from '../context/AppContext';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiCode, FiPlayCircle, FiSave, FiCheck, FiAlertCircle, FiTerminal, FiGitCommit, FiCpu } from 'react-icons/fi';
+import { resetEditorState, forceEditorReflow } from '../utils/editorUtils';
+import EditorFixButton from './EditorFixButton';
 
 const EditorContainer = styled(motion.div)`
   display: flex;
@@ -113,6 +115,28 @@ const EditorContent = styled.div`
   flex: 1;
   overflow: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  z-index: 1; /* Ensure content is properly stacked */
+  
+  /* Ensure Monaco editor has proper z-index */
+  .monaco-editor {
+    z-index: auto !important;
+  }
+  
+  /* Fix for monaco editor text input */
+  .monaco-editor .inputarea {
+    z-index: 10 !important;
+    opacity: 1 !important;
+    background: transparent !important;
+    pointer-events: auto !important;
+  }
+  
+  .monaco-editor-instance {
+    flex: 1;
+    min-height: 300px;
+  }
 `;
 
 const StatusBar = styled.div`
@@ -255,9 +279,23 @@ const AutocompleteItem = styled.div`
   }
 `;
 
+// Create a click interceptor styled component to help with editor focus
+const ClickInterceptor = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  pointer-events: ${props => props.active ? 'auto' : 'none'};
+  cursor: text;
+  background: transparent;
+`;
+
 function JavaEditor() {
   const { currentFRQ, preferences, saveCode, getSavedCode } = useAppContext();
   const editorRef = useRef(null);
+  const editorContainerRef = useRef(null);
   const [editorValue, setEditorValue] = useState('');
   const [editorStatus, setEditorStatus] = useState('idle'); // idle, loading, ready, error, success
   const [showRunPanel, setShowRunPanel] = useState(false);
@@ -266,6 +304,7 @@ function JavaEditor() {
   const [lineCount, setLineCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [saveStatus, setSaveStatus] = useState(null); // null, saving, saved, error
+  const [showClickInterceptor, setShowClickInterceptor] = useState(true);
   
   // Initialize editor with template based on current FRQ
   useEffect(() => {
@@ -283,8 +322,7 @@ function JavaEditor() {
       setEditorStatus('ready');
     }
   }, [currentFRQ, getSavedCode]);
-  
-  // Generate template code from method signature
+    // Generate template code from method signature
   const generateTemplateCode = (frq) => {
     if (!frq || !frq.methodSignature) return '// Loading...';
     
@@ -294,6 +332,8 @@ function JavaEditor() {
     // Simple template that includes the method signature and a comment
     return `// ${frq.title || 'FRQ Question'}\n// Write your solution below\n\n${methodSig} {\n    // Your code here\n    \n}`;
   };
+    // Handle click on the editor area to focus it
+  
   
   // Handle editor mount
   const handleEditorDidMount = (editor, monaco) => {
@@ -308,10 +348,52 @@ function JavaEditor() {
         scrollBeyondLastLine: false,
         automaticLayout: true,
         fontFamily: "'Fira Code', monospace",
-        fontLigatures: true
+        fontLigatures: true,
+        fixedOverflowWidgets: true, // Fix overflow widgets
+        mouseWheelZoom: false, // Disable zoom on ctrl+scroll to avoid conflicts
+        readOnly: false, // Ensure editor is not in read-only mode
+        tabCompletion: "on", // Enable tab completion
+        quickSuggestions: true // Enable quick suggestions
       });
     }
+      // Set focus to editor
+    setTimeout(() => {
+      try {
+        editor.focus();
+        
+        // Reset the editor state to ensure input works
+        if (editor._domElement) {
+          resetEditorState(editor._domElement);
+          forceEditorReflow(editor);
+        }
+        
+        // Hide click interceptor after editor is mounted and focused
+        setShowClickInterceptor(false);
+      } catch (err) {
+        console.error("Error setting editor focus:", err);
+      }
+    }, 300);
     
+    // Ensure editor resizes correctly
+    const resizeHandler = () => {
+      try {
+        editor.layout();
+      } catch (error) {
+        console.error("Error during editor layout:", error);
+      }
+    };
+    
+    window.addEventListener('resize', resizeHandler);
+    
+    // Clean up resize handler on unmount
+    return () => {
+      window.removeEventListener('resize', resizeHandler);
+    };
+    
+    // Force layout calculation
+    setTimeout(() => {
+      resizeHandler();
+    }, 100);
     // Configure Java language features
     monaco.languages.registerCompletionItemProvider('java', {
       provideCompletionItems: () => {
@@ -352,6 +434,19 @@ function JavaEditor() {
       // Auto-save if enabled
       if (preferences.autoSave && currentFRQ) {
         handleSaveCode();
+      }
+    });
+    
+    // Set up additional handlers for input focus
+    editor.onDidFocusEditorText(() => {
+      // Ensure the inputarea is visible and receives events
+      if (editor._domElement) {
+        const inputArea = editor._domElement.querySelector('.inputarea');
+        if (inputArea) {
+          inputArea.style.opacity = '1';
+          inputArea.style.zIndex = '10';
+          inputArea.style.pointerEvents = 'auto';
+        }
       }
     });
   };
@@ -433,12 +528,20 @@ function JavaEditor() {
       }
     }, 600);
   };
+  // Handle click on the editor area to focus it
+  const handleEditorClick = () => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+      setShowClickInterceptor(false);
+    }
+  };
 
   return (
     <EditorContainer
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4 }}
+      ref={editorContainerRef}
     >
       <EditorHeader>
         <EditorTitle>
@@ -467,16 +570,21 @@ function JavaEditor() {
             <FiPlayCircle /> Run
             <span className="tooltip">Run Code</span>
           </ActionButton>
-        </EditorActions>
-      </EditorHeader>
-      
-      <EditorContent>
+        </EditorActions>      </EditorHeader>
+        <EditorContent>
+        {showClickInterceptor && (
+          <ClickInterceptor 
+            active={true} 
+            onClick={handleEditorClick} 
+          />
+        )}
         <Editor
           height="100%"
+          width="100%"
           language="java"
           theme={preferences?.darkMode ? 'vs-dark' : 'vs-light'}
           value={editorValue}
-          options={{
+          onChange={(value) => setEditorValue(value)}          options={{
             fontSize: preferences?.fontSize || 14,
             minimap: preferences?.minimap || { enabled: true },
             scrollBeyondLastLine: false,
@@ -486,8 +594,60 @@ function JavaEditor() {
             wordWrap: 'on',
             tabSize: 2,
             lineNumbers: 'on',
+            readOnly: false,
+            quickSuggestions: true,
+            fixedOverflowWidgets: true,
+            autoIndent: 'advanced',
+            contextmenu: true,
+            renderWhitespace: 'selection',
+            overviewRulerLanes: 0, // Hide overview ruler to fix issues
+            renderLineHighlight: 'all',
+            scrollbar: {
+              vertical: 'visible',
+              horizontal: 'visible',
+              useShadows: false,
+              verticalHasArrows: false,
+              horizontalHasArrows: false,
+              verticalScrollbarSize: 10,
+              horizontalScrollbarSize: 10,
+              alwaysConsumeMouseWheel: false
+            },
+            suggest: {
+              preview: true,
+              showIcons: true,
+              maxVisibleSuggestions: 12,
+              showMethods: true,
+              showFunctions: true,
+              showConstructors: true,
+              showFields: true,
+              showVariables: true,
+              showClasses: true,
+              showStructs: true,
+              showInterfaces: true,
+              showModules: true,
+              showProperties: true,
+              showEvents: true,
+              showOperators: true,
+              showUnits: true,
+              showValues: true,
+              showConstants: true,
+              showEnums: true,
+              showEnumMembers: true,
+              showKeywords: true,
+              showWords: true,
+              showColors: true,
+              showFiles: true,
+              showReferences: true,
+              showFolders: true,
+              showTypeParameters: true,
+              showSnippets: true
+            }
           }}
+        
           onMount={handleEditorDidMount}
+          className="monaco-editor-instance"
+          loading={<div>Loading editor...</div>}
+          onClick={handleEditorClick}
         />
         
         <AnimatePresence>
@@ -533,6 +693,6 @@ function JavaEditor() {
       </StatusBar>
     </EditorContainer>
   );
-}
 
+}
 export default JavaEditor;
