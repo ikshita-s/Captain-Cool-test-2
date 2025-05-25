@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: wpilib/roborio-cross-ubuntu:2024-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add repository to git safe directories
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Compile and run tests on robot code
+        run: ./gradlew build
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'  # Adjust version as needed
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Run npm dev script
+        id: run-dev
+        continue-on-error: true
+        run: npm run dev
+        
+      - name: Notify Discord on failure
+        if: steps.run-dev.outcome == 'failure'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"⚠️ CI Workflow Alert: \`npm run dev\` failed on \`${{ github.repository }}\` (branch: \`${{ github.ref_name }}\`). Check the logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            $DISCORD_WEBHOOK
